@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
+import argparse
 import datetime
 import json
 import logging.config
 import os
+import re
 import urllib.request
 from collections import OrderedDict
 
@@ -74,23 +76,18 @@ def nested_extract(x):
     return links
 
 
-def save_all_to_file(json_dict, page_links, related_page_links, collection_links, pre_fix):
+def save_all_to_file(json_dict, page_links, related_page_links, collection_links, destination_dir, pre_fix):
     print("Number of pages for links:", len(page_links))
     print("Number of pages for json:", len(json_dict))
 
     rows_json = [value for key, value in json_dict.items()]
-    # rows_json = []
-    # for key, value in json_dict.items():
-    #   tempo = value
-    #  tempo['url'] = key
-    # rows_json.append(tempo)
     json_df = pd.DataFrame(rows_json)
     json_df.drop(['analytics_identifier', 'phase', 'public_updated_at',
                   'publishing_request_id', 'publishing_scheduled_at',
                   'scheduled_publishing_delay_seconds', 'schema_name',
                   'updated_at', 'withdrawn_notice'], axis=1, inplace=True)
 
-    json_df.to_csv(os.path.join(DATA_DIR, pre_fix + "content_json.csv.gz"), compression="gzip", index=False)
+    json_df.to_csv(os.path.join(destination_dir, pre_fix + "content_json.csv.gz"), compression="gzip", index=False)
 
     rows_links = [{"url": key,
                    "embedded_links": value,
@@ -103,11 +100,11 @@ def save_all_to_file(json_dict, page_links, related_page_links, collection_links
     df_rel['num_emb'] = df_rel['embedded_links'].map(len)
     df_rel['num_coll'] = df_rel['collection_links'].map(len)
 
-    df_rel.to_csv(os.path.join(DATA_DIR, pre_fix + "content_api_links.csv.gz"), index=False, compression="gzip")
-    logging.info("finished writing")
+    df_rel.to_csv(os.path.join(destination_dir, pre_fix + "content_api_links.csv.gz"), index=False, compression="gzip")
+    logging.info("Finished writing...")
 
 
-def chunked_extract(nodes_srs, chunks_list):
+def chunked_extract(nodes_srs, chunks_list, destination_dir):
     not_found = []
 
     for j, (start, end) in enumerate(chunks_list):
@@ -128,51 +125,103 @@ def chunked_extract(nodes_srs, chunks_list):
             except Exception:
                 not_found.append(url)
 
-            if content_item is not None:
-                links = get_text(content_item['details'])
-                related_links = []
-                coll_links = []
-                if 'ordered_related_items' in content_item['links'].keys():
-                    related_links = [related_item['base_path'] for related_item in
-                                     content_item['links']['ordered_related_items'] if
-                                     'base_path' in related_item.keys()]
-
-                if 'documents' in content_item['links'].keys():
-                    coll_links = [document['base_path'] for document in content_item['links']['documents'] if
-                                  'base_path' in document.keys()]
-
-                related_page_links[content_item['base_path']] = related_links
-                collection_links[content_item['base_path']] = coll_links
-                page_links[content_item['base_path']] = links
+            extract_link_types(collection_links, content_item, related_page_links, page_links)
 
             if i % 5000 == 0:
                 print(datetime.datetime.now().strftime("%H:%M:%S"), "run:", j, "row", i)
 
-        save_all_to_file(json_dict, page_links, related_page_links, collection_links,
-                         "pt{}of{}_".format(j + 1, len(chunks_list)))
+        save_all_to_file(json_dict, page_links, related_page_links, collection_links, destination_dir,
+                         "pt{:02d}of{}_".format(j + 1, len(chunks_list)))
     return not_found
 
 
-def compute_chunks(length, chunk_size, start):
-    return [(i, i + chunk_size) if i + chunk_size < length else (i, length - 1) for i in
-            range(start, length, chunk_size)]
+def extract_link_types(collection_links, content_item, related_page_links, page_links):
+    if content_item is not None:
+        links = get_text(content_item['details'])
+        related_links = []
+        coll_links = []
+        if 'ordered_related_items' in content_item['links'].keys():
+            related_links = [related_item['base_path'] for related_item in
+                             content_item['links']['ordered_related_items'] if
+                             'base_path' in related_item.keys()]
+
+        if 'documents' in content_item['links'].keys():
+            coll_links = [document['base_path'] for document in content_item['links']['documents'] if
+                          'base_path' in document.keys()]
+
+        related_page_links[content_item['base_path']] = related_links
+        collection_links[content_item['base_path']] = coll_links
+        page_links[content_item['base_path']] = links
+
+
+def compute_chunks(start, end, chunk_size):
+    return [(i, i + chunk_size) if i + chunk_size < end else (i, end - 1) for i in
+            range(start, end, chunk_size)]
+
+
+def merge_delete(directory):
+    logging.info("Merging and deleting created subfiles...")
+    files_to_del = merge_dataframe(directory)
+    for file in files_to_del:
+        logging.debug("Deleting {}...".format(file))
+        os.remove(file)
+
+
+def merge_dataframe(directory):
+    all_files = []
+    for keyword in ["json", "api_links"]:
+        filelist = sorted([os.path.join(directory, file) for file in os.listdir(directory) if keyword in file])
+        print(filelist)
+        filename = re.sub("pt\d+of\d+_", "", filelist[0])
+        logging.info("Saving {} file at {}.".format(keyword,filename))
+        pd.concat([pd.read_csv(f, compression="gzip") for f in filelist], ignore_index=True).to_csv(filename,
+                                                                                                    compression="gzip",
+                                                                                                    index=False)
+        all_files.extend(filelist)
+    return all_files
 
 
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Module that produces a merged, metadata-aggregated and '
+                                                 'preprocessed dataset (.csv.gz), given a source directory '
+                                                 'containing raw BigQuery extract dataset(s). Merging is '
+                                                 'skipped if only one file is provided.')
+    parser.add_argument('filename',  help='Input node dataframe filename. Will look in processed_network dir.')
+    parser.add_argument('start', default=0, nargs="?", help='Start index.')
+    parser.add_argument('end', default=-1, nargs="?", help='End index.')
+    parser.add_argument('step', default=10000, nargs="?", help='Step')
+    parser.add_argument('-q', '--quiet', action='store_true', default=False, help='Turn off debugging logging.')
+
+    args = parser.parse_args()
     LOGGING_CONFIG = os.getenv("LOGGING_CONFIG")
     logging.config.fileConfig(LOGGING_CONFIG)
-    logger = logging.getLogger('make_network_data')
+    logger = logging.getLogger('content_api_extract')
 
     DATA_DIR = os.getenv("DATA_DIR")
     processed_network = os.path.join(DATA_DIR, "processed_network")
-    nodefile = os.path.join(processed_network, "sampled_clean_nodes.csv.gz")
+    nodefile = os.path.join(processed_network, args.filename + ".csv.gz" if ".csv.gz" else args.filename)
+
+    content_api = os.path.join(DATA_DIR, "content_api")
+    dest_dir = os.path.join(content_api, datetime.datetime.now().strftime("%d-%m-%y"))
+
     nodes = pd.read_csv(nodefile, compression="gzip", sep="\t")
     print(nodes.shape)
-    chunks = compute_chunks(nodes.shape[0], 10000, 0)
+    shape = nodes.shape[0]
+    if args.end != -1:
+        shape = args.end
+    chunks = compute_chunks(args.start, shape, args.step)
     print(chunks)
+
+    if not os.path.isdir(dest_dir):
+        logging.info("Specified destination directory \"{}\" does not exist, creating...".format(dest_dir))
+        os.mkdir(dest_dir)
+
     not_found = chunked_extract(nodes.Node, chunks)
     print(len(not_found))
 
-    with open(os.path.join(DATA_DIR, "not_found_urls.csv"), "w") as writer:
+    with open(os.path.join(dest_dir, "not_found_urls.csv"), "w") as writer:
         for f in not_found:
             writer.write("{}\n".format(f))
+
+    merge_delete(dest_dir)
