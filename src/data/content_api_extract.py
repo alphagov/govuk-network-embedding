@@ -183,10 +183,8 @@ def merge_dataframe(directory):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Module that produces a merged, metadata-aggregated and '
-                                                 'preprocessed dataset (.csv.gz), given a source directory '
-                                                 'containing raw BigQuery extract dataset(s). Merging is '
-                                                 'skipped if only one file is provided.')
+    parser = argparse.ArgumentParser(description='Module to extract content item schema (page text and metadata' 
+                                                 'using the Content API.')
     parser.add_argument('filename',  help='Input node dataframe filename. Will look in processed_network dir.')
     parser.add_argument('start', default=0, nargs="?", help='Start index.')
     parser.add_argument('end', default=-1, nargs="?", help='End index.')
