@@ -11,6 +11,7 @@ from stellargraph import globalvar
 from stellargraph.layer.graphsage import MeanPoolingAggregator
 from stellargraph.mapper import GraphSAGELinkGenerator
 from keras.models import load_model
+import gzip
 
 
 def batched_predict(test_set, feature_set, node_feats, batch_size, num_samples, workers=8, use_multiprocessing=True,
@@ -36,7 +37,7 @@ def batched_predict(test_set, feature_set, node_feats, batch_size, num_samples, 
     return [p[0] for p in predicts], edge_ids_test
 
 
-def predict(test_set, feature_set, workers=8, use_multiprocessing=True,
+def predict(test_set, feature_set, filename, workers=8, use_multiprocessing=True,
             max_queue_size=100, batch_size=1, num_samples=[20, 10], chunk_size=10000):
     logger.debug("Setting up batched prediction...")
     node_features = feature_set[feature_set.columns].values
@@ -44,18 +45,32 @@ def predict(test_set, feature_set, workers=8, use_multiprocessing=True,
     test_set = test_set[['source', 'target', 'label']]
     logger.debug("# test set samples: {}".format(test_set.shape[0]))
 
-    predictions = []
-    test_ids = []
-    for indices in compute_batches(test_set.shape[0], chunk_size):
+    predict_batches = compute_batches(test_set.shape[0], chunk_size)
+
+    # predictions = []
+    # test_ids = []
+    for pt, indices in enumerate(predict_batches):
         logger.info("Working on indices: {}:{}".format(indices[0], indices[1]))
         pred_batch, id_batch = batched_predict(test_set[indices[0]:indices[1]], feature_set, node_features, batch_size,
                                                num_samples, workers,
                                                use_multiprocessing,
                                                max_queue_size)
-        predictions.extend(pred_batch)
-        test_ids.extend(id_batch)
 
-    return predictions, test_ids
+        logging.debug("First 10 predictions: {}".format(pred_batch[0:10]))
+        logging.debug("# predictions: {}\n# test_set ids: {}".format(len(pred_batch), len(id_batch)))
+
+        results_file = filename.replace(".csv.gz", "_results_pt{:02d}of{}.csv.gz".format(pt + 1, len(predict_batches)))
+        logging.debug("Writing predictions and test_set ids to file: {}".format(results_file))
+
+        with open(results_file, "w") as writer:
+            writer.write("prediction\tedge_1\tedge_2\n".encode())
+            for pred_i, id_i in zip(pred_batch, id_batch):
+                writer.write("{}\t{}\t{}\n".format(pred_i, id_i[0], id_i[1]).encode())
+
+        # predictions.extend(pred_batch)
+        # test_ids.extend(id_batch)
+
+    # return predictions, test_ids
 
 
 def compute_batches(length, chunksize):
@@ -88,14 +103,15 @@ if __name__ == "__main__":
 
     # workers = 8, use_multiprocessing = True,
     # max_queue_size = 100, batch_size = 1, num_samples = [20, 10]
-    all_predictions, all_test_ids = predict(predict_test, node_data, chunk_size=1000)
+    # all_predictions, all_test_ids =
+    predict(predict_test, node_data, filename=predict_file)
 
-    logging.debug("First 10 predictions: {}".format(all_predictions[0:10]))
-    logging.debug("# predictions: {}\n# test_set ids: {}".format(len(all_predictions), len(all_test_ids)))
+    # logging.debug("First 10 predictions: {}".format(all_predictions[0:10]))
+    # logging.debug("# predictions: {}\n# test_set ids: {}".format(len(all_predictions), len(all_test_ids)))
 
-    predict_test['predictions'] = all_predictions
-    predict_test['test_ids'] = all_test_ids
-
-    predict_output = predict_file.replace(".csv.gz", "_results.csv.gz")
-    logger.info("Saving results: {}".format(predict_output))
-    predict_test.to_csv(predict_output, compression="gzip")
+    # predict_test['predictions'] = all_predictions
+    # predict_test['test_ids'] = all_test_ids
+    #
+    # predict_output = predict_file.replace(".csv.gz", "_results.csv.gz")
+    # logger.info("Saving results: {}".format(predict_output))
+    # predict_test.to_csv(predict_output, compression="gzip")
