@@ -8,7 +8,7 @@ import pandas as pd
 matplotlib.use('PS')
 from stellargraph import StellarGraph
 from stellargraph import globalvar
-from stellargraph.layer.graphsage import MeanPoolingAggregator
+from stellargraph.layer.graphsage import MeanPoolingAggregator, MaxPoolingAggregator
 from stellargraph.mapper import GraphSAGELinkGenerator
 from keras.models import load_model
 import gzip
@@ -88,8 +88,8 @@ if __name__ == "__main__":
     logger = logging.getLogger('predict_model')
 
     predict_file = os.path.join(PREDICT_DIR, "predict_top50_vs_all.csv.gz")
-    node_data_file = os.path.join(PREDICT_DIR, "node_data_labelled_tfidf_2K.csv.gz")
-    model_file = os.path.join(MODELS_DIR, "graphsage_attentional_20meanpool_20e.h5")
+    node_data_file = os.path.join(PREDICT_DIR, "predict_top50_vs_all_node_data_embs_300.csv.gz")
+    model_file = os.path.join(MODELS_DIR, "MaxPoolingAggregator_b25_ns10-5_e20_220219.h5")
 
     logger.info("Reading edge pairs for prediction: {}".format(predict_file))
     predict_test = pd.read_csv(predict_file, compression="gzip")
@@ -98,20 +98,7 @@ if __name__ == "__main__":
     node_data = pd.read_csv(node_data_file, compression="gzip", index_col=0)
 
     logger.info("Loading model: {}".format(model_file))
-    model = load_model(model_file, custom_objects={'MeanPoolingAggregator': MeanPoolingAggregator})
+    model = load_model(model_file, custom_objects={'MaxPoolingAggregator': MaxPoolingAggregator})
     logger.debug(model.summary())
 
-    # workers = 8, use_multiprocessing = True,
-    # max_queue_size = 100, batch_size = 1, num_samples = [20, 10]
-    # all_predictions, all_test_ids =
-    predict(predict_test, node_data, filename=predict_file)
-
-    # logging.debug("First 10 predictions: {}".format(all_predictions[0:10]))
-    # logging.debug("# predictions: {}\n# test_set ids: {}".format(len(all_predictions), len(all_test_ids)))
-
-    # predict_test['predictions'] = all_predictions
-    # predict_test['test_ids'] = all_test_ids
-    #
-    # predict_output = predict_file.replace(".csv.gz", "_results.csv.gz")
-    # logger.info("Saving results: {}".format(predict_output))
-    # predict_test.to_csv(predict_output, compression="gzip")
+    predict(predict_test, node_data, filename=predict_file, use_multiprocessing=False, num_samples=[10, 5])
