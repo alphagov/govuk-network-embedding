@@ -340,8 +340,8 @@ if __name__ == "__main__":
     main(edges,
          embeddings,
          batch_size=args.batch_size,
-         num_samples=args.num_samples,
-         layer_sizes=args.neighbor_samples,
+         num_samples=args.neighbor_samples,
+         layer_sizes=args.layer_size,
          output_act=args.output_act,
          # : 'concat', 'mul', 'ip', 'l1', 'l2', or 'avg'"
          edge_embedding_method=args.edge_embedding_method,
