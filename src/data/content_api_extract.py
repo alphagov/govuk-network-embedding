@@ -71,8 +71,8 @@ def nested_extract(x):
             links.extend(get_links(order_json2[item]))
     elif 'child_sections' in order_json2.keys():
         for child in order_json2['child_sections']:
-            for key in child_keys:
-                links.extend(get_links(key))
+            if child in child_keys:
+                links.extend(get_links(child))
     return links
 
 
@@ -100,7 +100,7 @@ def save_all_to_file(json_dict, page_links, related_page_links, collection_links
     df_rel['num_emb'] = df_rel['embedded_links'].map(len)
     df_rel['num_coll'] = df_rel['collection_links'].map(len)
 
-    df_rel.to_csv(os.path.join(destination_dir, pre_fix + "content_api_links.csv.gz"), index=False, compression="gzip")
+    df_rel.to_csv(os.path.join(destination_dir, pre_fix + "content_api_links_22.csv.gz"), index=False, compression="gzip")
     logging.info("Finished writing...")
 
 
@@ -123,11 +123,12 @@ def chunked_extract(nodes_srs, chunks_list, destination_dir):
                 json_dict[node] = content_item
 
             except Exception:
+                # logger.debug("Url \'{}\' not found".format(url))
                 not_found.append(url)
 
             extract_link_types(collection_links, content_item, related_page_links, page_links)
 
-            if i % 5000 == 0:
+            if i % 500 == 0:
                 print(datetime.datetime.now().strftime("%H:%M:%S"), "run:", j, "row", i)
 
         save_all_to_file(json_dict, page_links, related_page_links, collection_links, destination_dir,
@@ -159,37 +160,38 @@ def compute_chunks(start, end, chunk_size):
             range(start, end, chunk_size)]
 
 
-def merge_delete(directory):
+def merge_delete(directory, prefix):
     logging.info("Merging and deleting created subfiles...")
-    files_to_del = merge_dataframe(directory)
+    files_to_del = merge_dataframe(directory, prefix)
     for file in files_to_del:
         logging.debug("Deleting {}...".format(file))
         os.remove(file)
 
 
-def merge_dataframe(directory):
+def merge_dataframe(directory, prefix):
     all_files = []
     for keyword in ["json", "api_links"]:
-        filelist = sorted([os.path.join(directory, file) for file in os.listdir(directory) if keyword in file])
+        filelist = sorted(
+            [os.path.join(directory, file) for file in os.listdir(directory) if keyword in file and "pt" in file])
         print(filelist)
-        filename = re.sub("pt\d+of\d+_", "", filelist[0])
-        logging.info("Saving {} file at {}.".format(keyword,filename))
-        pd.concat([pd.read_csv(f, compression="gzip") for f in filelist], ignore_index=True).to_csv(filename,
-                                                                                                    compression="gzip",
-                                                                                                    index=False)
+        filename = re.sub("pt\d+of\d+_", prefix, filelist[0])
+        logging.info("Saving {} file at {}.".format(keyword, filename))
+        pd.concat([pd.read_csv(file, compression="gzip")
+                   for file in filelist], ignore_index=True).to_csv(filename,
+                                                                    compression="gzip",
+                                                                    index=False)
         all_files.extend(filelist)
     return all_files
 
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Module to extract content item schema (page text and metadata' 
+    parser = argparse.ArgumentParser(description='Module to extract content item schema (page text and metadata'
                                                  'using the Content API.')
-    parser.add_argument('filename',  help='Input node dataframe filename. Will look in processed_network dir.')
-    parser.add_argument('start', default=0, nargs="?", help='Start index.')
-    parser.add_argument('end', default=-1, nargs="?", help='End index.')
-    parser.add_argument('step', default=10000, nargs="?", help='Step')
-    parser.add_argument('-q', '--quiet', action='store_true', default=False, help='Turn off debugging logging.')
+    parser.add_argument('filename', help='Input node dataframe filename. Will look in processed_network dir.')
+    parser.add_argument('-start', default=0,  type=int, help='Start index.')
+    parser.add_argument('-end', default=-1, type=int, help='End index.')
+    parser.add_argument('-step', default=10000, type=int, help='Step')
 
     args = parser.parse_args()
     LOGGING_CONFIG = os.getenv("LOGGING_CONFIG")
@@ -214,12 +216,16 @@ if __name__ == '__main__':
     if not os.path.isdir(dest_dir):
         logging.info("Specified destination directory \"{}\" does not exist, creating...".format(dest_dir))
         os.mkdir(dest_dir)
+    else:
+        logging.info("Specified destination directory \"{}\" does exist, creating v2...".format(dest_dir))
+        dest_dir = dest_dir + "_v2"
+        os.mkdir(dest_dir)
 
-    not_found = chunked_extract(nodes.Node, chunks)
+    not_found = chunked_extract(nodes.Node, chunks, dest_dir)
     print(len(not_found))
 
     with open(os.path.join(dest_dir, "not_found_urls.csv"), "w") as writer:
         for f in not_found:
             writer.write("{}\n".format(f))
 
-    merge_delete(dest_dir)
+    merge_delete(dest_dir, args.filename)
