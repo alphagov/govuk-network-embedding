@@ -87,7 +87,7 @@ def save_all_to_file(json_dict, page_links, related_page_links, collection_links
                   'scheduled_publishing_delay_seconds', 'schema_name',
                   'updated_at', 'withdrawn_notice'], axis=1, inplace=True)
 
-    json_df.to_csv(os.path.join(destination_dir, pre_fix + "content_json.csv.gz"), compression="gzip", index=False)
+    json_df.to_csv(os.path.join(destination_dir, pre_fix + "_content_json.csv.gz"), compression="gzip", index=False)
 
     rows_links = [{"url": key,
                    "embedded_links": value,
@@ -100,7 +100,7 @@ def save_all_to_file(json_dict, page_links, related_page_links, collection_links
     df_rel['num_emb'] = df_rel['embedded_links'].map(len)
     df_rel['num_coll'] = df_rel['collection_links'].map(len)
 
-    df_rel.to_csv(os.path.join(destination_dir, pre_fix + "content_api_links_22.csv.gz"), index=False, compression="gzip")
+    df_rel.to_csv(os.path.join(destination_dir, pre_fix + "_content_api_links.csv.gz"), index=False, compression="gzip")
     logging.info("Finished writing...")
 
 
