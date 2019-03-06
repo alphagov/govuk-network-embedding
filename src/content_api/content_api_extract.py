@@ -6,74 +6,10 @@ import logging.config
 import os
 import re
 import urllib.request
-from collections import OrderedDict
 
 import pandas as pd
-from bs4 import BeautifulSoup
-from lxml import html
-from pandas.io.json import json_normalize
 
-
-def get_links(url):
-    links = []
-    try:
-        soup = BeautifulSoup(url, "html5lib")
-        links = [link.get('href') for link in soup.findAll('a', href=True)]
-    except Exception:
-        print("error")
-    return [l for l in links if l.startswith("/")]
-
-
-look = ['title', 'body']
-child_keys = ['title', 'description']
-filtered = ['body', 'brand', 'documents', 'final_outcome_detail', 'final_outcome_documents',
-            'government', 'headers', 'introduction', 'introductory_paragraph',
-            'licence_overview', 'licence_short_description', 'logo', 'metadata', 'more_information', 'need_to_know',
-            'other_ways_to_apply', 'summary', 'ways_to_respond', 'what_you_need_to_know', 'will_continue_on', 'parts',
-            'collection_groups']
-
-
-def is_html(raw_text):
-    return html.fromstring(str(raw_text)).find('.//*') is not None
-
-
-def is_json(raw_text):
-    try:
-        json_normalize(raw_text).columns.tolist()
-    except AttributeError:
-        return False
-    return True
-
-
-def get_text(x):
-    links = []
-    string_json = json.dumps(OrderedDict(x))
-    order_json = json.loads(string_json, object_pairs_hook=OrderedDict)
-    for key, raw_text in sorted(order_json.items()):
-        if key in filtered:
-            if isinstance(raw_text, str) and len(raw_text) > 1:
-                links.extend(get_links(raw_text))
-            elif isinstance(raw_text, list) and len(raw_text) > 0:
-                for sub_text in raw_text:
-                    if is_json(sub_text):
-                        links.extend(nested_extract(sub_text))
-                    elif is_html(sub_text):
-                        links.extend(get_links(sub_text))
-    return list(set(links))
-
-
-def nested_extract(x):
-    links = []
-    string_json2 = json.dumps(OrderedDict(x))
-    order_json2 = json.loads(string_json2, object_pairs_hook=OrderedDict)
-    if ('body' or 'title') in order_json2.keys():
-        for item in look:
-            links.extend(get_links(order_json2[item]))
-    elif 'child_sections' in order_json2.keys():
-        for child in order_json2['child_sections']:
-            if child in child_keys:
-                links.extend(get_links(child))
-    return links
+from src.content_api.details_utils import extract_from_details
 
 
 def save_all_to_file(json_dict, page_links, related_page_links, collection_links, destination_dir, pre_fix):
@@ -138,7 +74,7 @@ def chunked_extract(nodes_srs, chunks_list, destination_dir):
 
 def extract_link_types(collection_links, content_item, related_page_links, page_links):
     if content_item is not None:
-        links = get_text(content_item['details'])
+        links = extract_from_details(content_item['details'])
         related_links = []
         coll_links = []
         if 'ordered_related_items' in content_item['links'].keys():
@@ -189,7 +125,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Module to extract content item schema (page text and metadata'
                                                  'using the Content API.')
     parser.add_argument('filename', help='Input node dataframe filename. Will look in processed_network dir.')
-    parser.add_argument('-start', default=0,  type=int, help='Start index.')
+    parser.add_argument('-start', default=0, type=int, help='Start index.')
     parser.add_argument('-end', default=-1, type=int, help='End index.')
     parser.add_argument('-step', default=10000, type=int, help='Step')
 
