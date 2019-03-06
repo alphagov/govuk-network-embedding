@@ -8,11 +8,13 @@ from pandas.io.json import json_normalize
 
 look = ['title', 'body']
 child_keys = ['title', 'description']
-filtered = ['body', 'brand', 'documents', 'final_outcome_detail', 'final_outcome_documents',
-            'government', 'headers', 'introduction', 'introductory_paragraph',
-            'licence_overview', 'licence_short_description', 'logo', 'metadata', 'more_information', 'need_to_know',
-            'other_ways_to_apply', 'summary', 'ways_to_respond', 'what_you_need_to_know', 'will_continue_on', 'parts',
-            'collection_groups']
+details_sections = ['body', 'brand', 'documents', 'final_outcome_detail', 'final_outcome_documents',
+                    'government', 'headers', 'introduction', 'introductory_paragraph',
+                    'licence_overview', 'licence_short_description', 'logo', 'metadata', 'more_information',
+                    'need_to_know',
+                    'other_ways_to_apply', 'summary', 'ways_to_respond', 'what_you_need_to_know', 'will_continue_on',
+                    'parts',
+                    'collection_groups']
 
 
 def is_json(raw_text):
@@ -52,10 +54,15 @@ def extract_text(body):
     return r
 
 
-def extract_html_links(url):
+def extract_html_links(text):
+    """
+    Grab any GOV.UK domain-specific links from page text.
+    :param text: Text within a details sub-section, refer to filtered for keys.
+    :return: list of links
+    """
     links = []
     try:
-        soup = BeautifulSoup(url, "html5lib")
+        soup = BeautifulSoup(text, "html5lib")
         links = [link.get('href') for link in soup.findAll('a', href=True)]
     except Exception:
         print("error")
@@ -63,15 +70,15 @@ def extract_html_links(url):
             if l.startswith("/") or l.startswith("https://www.gov.uk/")]
 
 
-def nested_json_extract(aggregator, x):
+def nested_json_extract(aggregator, nested_json):
     """
     Iterate over nested json (avoiding recursion), flattening loops.
-    :param aggregator:
-    :param x: nested `details` cell contents
-    :return: plaintext
+    :param aggregator: text or links aggregator
+    :param nested_json: nested `details` schema contents
+    :return: text or links
     """
 
-    sub_json_str = json.dumps(OrderedDict(x))
+    sub_json_str = json.dumps(OrderedDict(nested_json))
     order_sub_json = json.loads(sub_json_str, object_pairs_hook=OrderedDict)
     if ('body' or 'title') in order_sub_json.keys():
         for item in look:
@@ -93,7 +100,7 @@ def nested_json_extract(aggregator, x):
 
 def flat_extract(aggregator, raw_text=""):
     """
-
+    Aggregate text from a details section, then strip it from html or extract links depending on aggregator functionality.
     :param aggregator:
     :param raw_text:
     :return:
@@ -111,7 +118,7 @@ def flat_extract(aggregator, raw_text=""):
 
 def nested_extract(aggregator, sub_text=""):
     """
-
+    Section of details may be a further nested json dict or html, aggregate text or links from that.
     :param aggregator:
     :param sub_text:
     :return:
@@ -127,29 +134,30 @@ def nested_extract(aggregator, sub_text=""):
     return aggregator
 
 
-def extract_from_details(x, function_type="text"):
+def extract_from_details(details, function_type="text"):
     """
-
-    :param x:
-    :param function_type:
-    :return:
+    Generic implementation to extract text or links from the details entry in a content store item. Details contains
+    what is shown in the main body of a page. This is catered to content pages.
+    :param details: A nested json dictionary-like structure
+    :param function_type: extract texts or links
+    :return: the aggregated text or links
     """
     if function_type == "text":
         aggregator = ""
     elif function_type == "links":
         aggregator = []
 
-    for key, raw_text in sorted(x.items()):
-        if key in filtered:
+    for key, raw_text in sorted(details.items()):
+        if key in details_sections:
             if isinstance(raw_text, str) and len(raw_text) > 1:
                 aggregator = flat_extract(aggregator, raw_text)
             elif isinstance(raw_text, list) and len(raw_text) > 0:
                 for sub_text in raw_text:
                     aggregator = nested_extract(aggregator, sub_text)
 
-    if isinstance(aggregator, list) and "transaction_start_link" in x.keys():
-        aggregator.append(x["transaction_start_link"])
+    if isinstance(aggregator, list) and "transaction_start_link" in details.keys():
+        aggregator.append(details["transaction_start_link"])
     if isinstance(aggregator, str):
         aggregator = aggregator.strip()
-        
+
     return aggregator
