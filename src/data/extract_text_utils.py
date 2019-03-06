@@ -59,24 +59,8 @@ def extract_html_links(url):
         links = [link.get('href') for link in soup.findAll('a', href=True)]
     except Exception:
         print("error")
-    return [l for l in links if l.startswith("/")]
-
-
-# def get_links(x):
-#     links = []
-#     string_json = json.dumps(OrderedDict(x))
-#     order_json = json.loads(string_json, object_pairs_hook=OrderedDict)
-#     for key, raw_text in sorted(order_json.items()):
-#         if key in filtered:
-#             if isinstance(raw_text, str) and len(raw_text) > 1:
-#                 links.extend(flat_extract(1, raw_text))
-#             elif isinstance(raw_text, list) and len(raw_text) > 0:
-#                 for sub_text in raw_text:
-#                     if is_json(sub_text):
-#                         links.extend(nested_extract_links(sub_text))
-#                     elif is_html(sub_text):
-#                         links.extend(extract_html_links(sub_text))
-#     return list(set(links))
+    return [l.replace("https://www.gov.uk/", "") for l in links
+            if l.startswith("/") or l.startswith("https://www.gov.uk/")]
 
 
 def nested_json_extract(aggregator, x):
@@ -104,23 +88,6 @@ def nested_json_extract(aggregator, x):
                     aggregator += " " + child[key]
                 else:
                     aggregator.extend(extract_html_links(child))
-    return aggregator
-
-
-def extract_from_details(aggregator, x):
-    """
-
-    :param x:
-    :param aggregator:
-    :return:
-    """
-    for key, raw_text in sorted(x.items()):
-        if key in filtered:
-            if isinstance(raw_text, str) and len(raw_text) > 1:
-                aggregator = flat_extract(aggregator, raw_text)
-            elif isinstance(raw_text, list) and len(raw_text) > 0:
-                for sub_text in raw_text:
-                    aggregator = nested_extract(aggregator, sub_text)
     return aggregator
 
 
@@ -160,53 +127,29 @@ def nested_extract(aggregator, sub_text=""):
     return aggregator
 
 
-def get_text_json_file(x, aggregator):
-    """
-From dict to json and back (to OrderedDict), iterate over json from details column (based on list filtered, should
-reconsider) and extract plaintext from included html.
-    :param x: details cell from dataset
-    :return: plaintext
+def extract_from_details(x, function_type="text"):
     """
 
-    if x != "":
-        return extract_from_details("", x).strip()
-    else:
-        links = []
-        string_json = json.dumps(OrderedDict(x))
-        order_json = json.loads(string_json, object_pairs_hook=OrderedDict)
-        links = extract_from_details(0, x)
-    return total_text
+    :param x:
+    :param function_type:
+    :return:
+    """
+    if function_type == "text":
+        aggregator = ""
+    elif function_type == "links":
+        aggregator = []
 
-# def nested_extract_text(x):
-#     """
-# Iterate over nested json (avoiding recursion), flattening loops.
-#     :param x: nested `details` cell contents
-#     :return: plaintext
-#     """
-#     ttext = ""
-#     string_json2 = json.dumps(OrderedDict(x))
-#     order_json2 = json.loads(string_json2, object_pairs_hook=OrderedDict)
-#     if ('body' or 'title') in order_json2.keys():
-#         for item in look:
-#             raw_string2 = extract_text(order_json2[item])
-#             if len(raw_string2.split()) > 1:
-#                 ttext += " " + raw_string2
-#     elif 'child_sections' in order_json2.keys():
-#         for child in order_json2['child_sections']:
-#             for key in child_keys:
-#                 ttext += " " + child[key]
-#     return ttext
-#
-#
-# def nested_extract_links(x):
-#     links = []
-#     string_json2 = json.dumps(OrderedDict(x))
-#     order_json2 = json.loads(string_json2, object_pairs_hook=OrderedDict)
-#     if ('body' or 'title') in order_json2.keys():
-#         for item in look:
-#             links.extend(extract_html_links(order_json2[item]))
-#     elif 'child_sections' in order_json2.keys():
-#         for child in order_json2['child_sections']:
-#             if child in child_keys:
-#                 links.extend(extract_html_links(child))
-#     return links
+    for key, raw_text in sorted(x.items()):
+        if key in filtered:
+            if isinstance(raw_text, str) and len(raw_text) > 1:
+                aggregator = flat_extract(aggregator, raw_text)
+            elif isinstance(raw_text, list) and len(raw_text) > 0:
+                for sub_text in raw_text:
+                    aggregator = nested_extract(aggregator, sub_text)
+
+    if isinstance(aggregator, list) and "transaction_start_link" in x.keys():
+        aggregator.append(x["transaction_start_link"])
+    if isinstance(aggregator, str):
+        aggregator = aggregator.strip()
+        
+    return aggregator
