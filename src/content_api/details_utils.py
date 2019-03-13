@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import json
 from collections import OrderedDict
 
@@ -6,9 +7,9 @@ from lxml import etree
 from lxml import html
 from pandas.io.json import json_normalize
 
-look = ['title', 'body']
-child_keys = ['title', 'description']
-details_sections = ['body', 'brand', 'documents', 'final_outcome_detail', 'final_outcome_documents',
+LOOK = ['title', 'body']
+CHILD_KEYS = ['title', 'description']
+DETAILS_SECTIONS = ['body', 'brand', 'documents', 'final_outcome_detail', 'final_outcome_documents',
                     'government', 'headers', 'introduction', 'introductory_paragraph',
                     'licence_overview', 'licence_short_description', 'logo', 'metadata', 'more_information',
                     'need_to_know',
@@ -81,7 +82,7 @@ def nested_json_extract(aggregator, nested_json):
     sub_json_str = json.dumps(OrderedDict(nested_json))
     order_sub_json = json.loads(sub_json_str, object_pairs_hook=OrderedDict)
     if ('body' or 'title') in order_sub_json.keys():
-        for item in look:
+        for item in LOOK:
             if isinstance(aggregator, str):
                 sub_raw_str = extract_text(order_sub_json[item])
                 if len(sub_raw_str.split()) > 1:
@@ -90,7 +91,7 @@ def nested_json_extract(aggregator, nested_json):
                 aggregator += extract_html_links(order_sub_json[item])
     elif 'child_sections' in order_sub_json.keys():
         for child in order_sub_json['child_sections']:
-            for key in child_keys:
+            for key in CHILD_KEYS:
                 if isinstance(aggregator, str):
                     aggregator += " " + child[key]
                 else:
@@ -148,7 +149,7 @@ def extract_from_details(details, function_type="text"):
         aggregator = []
 
     for key, raw_text in sorted(details.items()):
-        if key in details_sections:
+        if key in DETAILS_SECTIONS:
             if isinstance(raw_text, str) and len(raw_text) > 1:
                 aggregator = flat_extract(aggregator, raw_text)
             elif isinstance(raw_text, list) and len(raw_text) > 0:
