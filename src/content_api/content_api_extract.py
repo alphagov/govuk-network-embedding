@@ -74,7 +74,7 @@ def chunked_extract(nodes_srs, chunks_list, destination_dir):
 
 def extract_link_types(collection_links, content_item, related_page_links, page_links):
     if content_item is not None:
-        links = extract_from_details(content_item['details'])
+        links = extract_from_details(content_item['details'], "links")
         related_links = []
         coll_links = []
         if 'ordered_related_items' in content_item['links'].keys():
