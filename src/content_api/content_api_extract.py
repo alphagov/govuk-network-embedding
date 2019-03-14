@@ -16,7 +16,7 @@ def save_all_to_file(json_dict, page_links, related_page_links, collection_links
     print("Number of pages for links:", len(page_links))
     print("Number of pages for json:", len(json_dict))
 
-    rows_json = [value for key, value in json_dict.items()]
+    rows_json = list(json_dict.values())
     json_df = pd.DataFrame(rows_json)
     json_df.drop(['analytics_identifier', 'phase', 'public_updated_at',
                   'publishing_request_id', 'publishing_scheduled_at',
@@ -30,7 +30,6 @@ def save_all_to_file(json_dict, page_links, related_page_links, collection_links
                    "related_links": related_page_links[key],
                    "collection_links": collection_links[key]} for key, value in page_links.items()]
     df_rel = pd.DataFrame(rows_links)
-    df_rel = df_rel[['url', 'embedded_links', 'related_links', 'collection_links']]
 
     df_rel['num_rel'] = df_rel['related_links'].map(len)
     df_rel['num_emb'] = df_rel['embedded_links'].map(len)
