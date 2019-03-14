@@ -67,7 +67,7 @@ def extract_html_links(text):
         links = [link.get('href') for link in soup.findAll('a', href=True)]
     except Exception:
         print("error")
-    return [l.replace("https://www.gov.uk/", "") for l in links
+    return [l.replace("https://www.gov.uk/", "/") for l in links
             if l.startswith("/") or l.startswith("https://www.gov.uk/")]
 
 
