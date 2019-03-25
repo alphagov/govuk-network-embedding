@@ -163,7 +163,6 @@ def extract_from_details(details, function_type):
 
     return aggregator
 
-
 def cs_extract_text(details):
     """
     Generic implementation to extract text or links from the details entry in a content store item. Details contains
