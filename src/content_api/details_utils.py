@@ -135,7 +135,7 @@ def nested_extract(aggregator, sub_text=""):
     return aggregator
 
 
-def extract_from_details(details, function_type="text"):
+def extract_from_details(details, function_type):
     """
     Generic implementation to extract text or links from the details entry in a content store item. Details contains
     what is shown in the main body of a page. This is catered to content pages.
@@ -162,3 +162,84 @@ def extract_from_details(details, function_type="text"):
         aggregator = aggregator.strip()
 
     return aggregator
+
+def cs_extract_text(details):
+    """
+    Generic implementation to extract text or links from the details entry in a content store item. Details contains
+    what is shown in the main body of a page. This is catered to content pages.
+    :param details: A nested json dictionary-like structure
+    :param function_type: extract texts or links
+    :return: the aggregated text or links
+    """
+
+    text = ""
+    for key, dict_list in sorted(details.items()):
+        if key in DETAILS_SECTIONS:
+            # print("thru if", key)
+            if isinstance(dict_list, list):
+                for dict_i in dict_list:
+                    # print("dict_i", dict_i)
+                    if 'content_type' in dict_i.keys() and dict_i['content_type'] == "text/html":
+                        # print("get content")
+                        text += " " + extract_text(dict_i['content'])
+                    elif any(l in dict_i.keys() for l in LOOK):
+                        for l in LOOK:
+                            if l in dict_i.keys():
+                                # if isinstance(dict_i[l], dict):
+                                #     print("this is a dict")
+                                #     for dict_j in dict_i[l]:
+                                #         print(dict_j)
+                                #         if 'content_type' in dict_j.keys() and dict_j['content_type'] == "text/html":
+                                #             text += " " + extract_text(dict_j['content'])
+                                if isinstance(dict_i[l], list):
+                                    for item in dict_i[l]:
+                                        text += cs_extract_text(item)
+                                elif isinstance(dict_i[l], str):
+                                    text += " " + extract_text(dict_i[l])
+                                else:
+                                    print("not a list, not a str")
+                                    print(l, dict_i)
+            elif isinstance(dict_list, dict):
+                for l in LOOK:
+                    if l in dict_list.keys():
+                        text += " " + extract_text(dict_list[l])
+            else:
+                # print("not a dict, not a list")
+                # print(key, dict_list)
+                text += " " + extract_text(dict_list)
+
+    return text.strip()
+
+
+def cs_extract_links(details):
+    """
+    Generic implementation to extract text or links from the details entry in a content store item. Details contains
+    what is shown in the main body of a page. This is catered to content pages.
+    :param details: A nested json dictionary-like structure
+    :param function_type: extract texts or links
+    :return: the aggregated text or links
+    """
+
+    links = []
+
+    for key, dict_list in sorted(details.items()):
+        if key in DETAILS_SECTIONS:
+            # print("thru if", key)
+            if isinstance(dict_list, list):
+                for dict_i in dict_list:
+                    # print("dict_i", dict_i)
+                    if 'content_type' in dict_i.keys() and dict_i['content_type'] == "text/html":
+                        # print("get content")
+                        links.extend(extract_html_links(dict_i['content']))
+                    elif any(l in dict_i.keys() for l in LOOK):
+                        for l in LOOK:
+                            print(l)
+                            if l in dict_i.keys():
+                                for dict_j in dict_i[l]:
+                                    print(dict_j)
+                                    if 'content_type' in dict_j.keys() and dict_j['content_type'] == "text/html":
+                                        links.extend(extract_html_links(dict_j['content']))
+    if "transaction_start_link" in details.keys():
+        links.append(details["transaction_start_link"])
+
+    return links
